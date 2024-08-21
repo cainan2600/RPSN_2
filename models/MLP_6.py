@@ -17,6 +17,7 @@ class MLP_self(nn.Module):
         self.linear5 = torch.nn.Linear(num_h, num_h)
         self.relu5 = torch.nn.ReLU()
         self.linear6 = torch.nn.Linear(num_h, num_o)
+        self.dropout = torch.nn.Dropout(0.5)
 
     def forward(self, input):
         x = self.linear1(input)

@@ -57,7 +57,7 @@ def calculate_IK(input_tar, MLP_output_base, a, d, alpha):
 
         num_Error1 += 1
 
-        return angle_solution, num_Error1, num_Error2
+        return angle_solution, num_Error1, num_Error2, the_NANLOSS_of_illegal_solution_with_num_and_Nan
 
     # 求角5
     theta51 = torch.acos(ax * sin(theta11) - ay * cos(theta11))
@@ -121,7 +121,6 @@ def calculate_IK(input_tar, MLP_output_base, a, d, alpha):
     t38 = -torch.acos((m[6] ** 2 + n[6] ** 2 - a[1] ** 2 - a[2] ** 2) / (2 * a[1] * a[2]))
     t3 = torch.stack([t31, t32, t33, t34, t35, t36, t37, t38], 0)
 
-
     save_what_caused_Error2_as_Nan.append((m[0] ** 2 + n[0] ** 2 - a[1] ** 2 - a[2] ** 2) / (2 * a[1] * a[2]))
     save_what_caused_Error2_as_Nan.append((m[0] ** 2 + n[0] ** 2 - a[1] ** 2 - a[2] ** 2) / (2 * a[1] * a[2]))
     save_what_caused_Error2_as_Nan.append((m[2] ** 2 + n[2] ** 2 - a[1] ** 2 - a[2] ** 2) / (2 * a[1] * a[2]))
@@ -130,10 +129,6 @@ def calculate_IK(input_tar, MLP_output_base, a, d, alpha):
     save_what_caused_Error2_as_Nan.append((m[4] ** 2 + n[4] ** 2 - a[1] ** 2 - a[2] ** 2) / (2 * a[1] * a[2]))
     save_what_caused_Error2_as_Nan.append((m[6] ** 2 + n[6] ** 2 - a[1] ** 2 - a[2] ** 2) / (2 * a[1] * a[2]))
     save_what_caused_Error2_as_Nan.append((m[6] ** 2 + n[6] ** 2 - a[1] ** 2 - a[2] ** 2) / (2 * a[1] * a[2]))
-
-
-
-
 
     nan_index = torch.isnan(t3).nonzero()
     for i in nan_index:
@@ -147,7 +142,7 @@ def calculate_IK(input_tar, MLP_output_base, a, d, alpha):
 
         num_Error2 += 1
 
-        return angle_solution, num_Error1, num_Error2
+        return angle_solution, num_Error1, num_Error2, the_NANLOSS_of_illegal_solution_with_num_and_Nan
 
     else:
         pass
@@ -183,7 +178,7 @@ def calculate_IK(input_tar, MLP_output_base, a, d, alpha):
     angle_solution = torch.stack([t1, t2, t3, t4, t5, t6], 0)
     angle_solution = torch.t(angle_solution)
 
-    return angle_solution, num_Error1, num_Error2
+    return angle_solution, num_Error1, num_Error2, the_NANLOSS_of_illegal_solution_with_num_and_Nan
 
 def calculate_IK_test(input_tar, MLP_output_base, a, d, alpha):
 
@@ -218,7 +213,7 @@ def calculate_IK_test(input_tar, MLP_output_base, a, d, alpha):
 
         IK_test_incorrect += 1
 
-        return angle_solution, IK_test_incorrect
+        return angle_solution
 
     # 求角5
     theta51 = torch.acos(ax * sin(theta11) - ay * cos(theta11))
@@ -294,7 +289,7 @@ def calculate_IK_test(input_tar, MLP_output_base, a, d, alpha):
 
         IK_test_incorrect += 1
 
-        return angle_solution, IK_test_incorrect
+        return angle_solution
 
     else:
         pass
@@ -331,4 +326,4 @@ def calculate_IK_test(input_tar, MLP_output_base, a, d, alpha):
     angle_solution = torch.t(angle_solution)
 
 
-    return angle_solution, IK_test_incorrect
+    return angle_solution

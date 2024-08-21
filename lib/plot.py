@@ -31,14 +31,14 @@ def plot_IK_solution(checkpoint_dir, start_epoch, epochs, num_train, num_incorre
 
     # plt.show()
 
-def plot_train(checkpoint_dir, start_epoch, epochs, num_train, numError1, numError2, numNOError1, numNOError2):
+def plot_train(checkpoint_dir, start_epoch, epochs, num_train, numError1, numError2, num_incorrect, num_correct):
     draw_epochs = list(range(start_epoch, start_epoch + epochs))
     plt.figure()
 
     plt.plot(draw_epochs, numError1, 'r-', label='illroot')
     plt.plot(draw_epochs, numError2, 'g-', label='outdom')
-    plt.plot(draw_epochs, numNOError1, 'b-', label='illsolu')
-    plt.plot(draw_epochs, numNOError2, 'b-', linewidth=3, label='idesolu')
+    plt.plot(draw_epochs, num_incorrect, 'b-', label='illsolu')
+    plt.plot(draw_epochs, num_correct, 'b-', linewidth=3, label='idesolu')
 
     plt.annotate('{} data sets'.format(num_train), xy=(0.4, 0.5), xycoords='axes fraction', fontsize=12,
                  color='gray', horizontalalignment='center', verticalalignment='center')
@@ -75,11 +75,11 @@ def plot_train_loss(checkpoint_dir, start_epoch, epochs, echo_loss):
     file_path = os.path.join(checkpoint_dir, 'Training loss.png')
     plt.savefig(file_path)
 
-def plot_test_loss(checkpoint_dir, start_epoch, epochs, echo_loss):
+def plot_test_loss(checkpoint_dir, start_epoch, epochs, echo_loss_test):
     draw_epochs = list(range(start_epoch, start_epoch + epochs))
     plt.figure()
 
-    plt.plot(draw_epochs, echo_loss, 'r-', label='loss for every epoch')
+    plt.plot(draw_epochs, echo_loss_test, 'r-', label='loss for every epoch')
 
     plt.xlabel('Epoch')
     plt.ylabel('Value')
@@ -107,4 +107,20 @@ def plot_2_to_1(checkpoint_dir, start_epoch, epochs, NUM_2_to_1, NUM_mid, NUM_la
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
     file_path = os.path.join(checkpoint_dir, 'test_2_to_1.png')
+    plt.savefig(file_path)
+
+def plot_sametime_solution(checkpoint_dir, start_epoch, epochs, NUM_sametime_solution):
+    draw_epochs = list(range(start_epoch, start_epoch + epochs))
+    plt.figure()
+
+    plt.plot(draw_epochs, NUM_sametime_solution, 'r-', label='NUM_sametime_solution')
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Value')
+    plt.title('num_sametime_solution')
+    plt.legend()
+
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+    file_path = os.path.join(checkpoint_dir, 'sametime_solution.png')
     plt.savefig(file_path)

@@ -6,7 +6,7 @@ import numpy as np
 
 import argparse
 from torch.utils.data import Dataset, DataLoader, TensorDataset
-from data.data_yanlong import train_dataset, test_dataset
+from data.data_yanlong import train_dataset, test_dataset, data_update
 from models import MLP_3, MLP_6
 from lib.trans_all import *
 from lib import IK, IK_loss, planner_loss
@@ -23,7 +23,7 @@ class main():
         self.parser = argparse.ArgumentParser(description="Training MLP")
         self.parser.add_argument('--batch_size', type=int, default=5, help='input batch size for training (default: 1)')
         self.parser.add_argument('--learning_rate', type=float, default=0.0025, help='learning rate (default: 0.003)')
-        self.parser.add_argument('--epochs', type=int, default=200, help='gradient clip value (default: 300)')
+        self.parser.add_argument('--epochs', type=int, default=100, help='gradient clip value (default: 300)')
         self.parser.add_argument('--clip', type=float, default=1, help='gradient clip value (default: 1)')
         self.parser.add_argument('--num_train', type=int, default=1000)
         self.args = self.parser.parse_args()
@@ -32,6 +32,7 @@ class main():
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         # 训练集数据导入
+        # self.data_train = TensorDataset(data_update.train_data(self.args.num_train))
         self.data_train = TensorDataset(train_dataset.a[:self.args.num_train])
         self.data_loader_train = DataLoader(self.data_train, batch_size=self.args.batch_size, shuffle=False)
         # 测试集数据导入
@@ -39,7 +40,7 @@ class main():
         self.data_loader_test = DataLoader(self.data_test, batch_size=self.args.batch_size, shuffle=False)
 
         # 定义训练权重保存文件路径
-        self.checkpoint_dir = r'/home/cn/RPSN_2/work_dir/test12'
+        self.checkpoint_dir = r'/home/cn/RPSN_2/work_dir/test16'
         # 多少伦保存一次
         self.num_epoch_save = 200
 
@@ -47,7 +48,7 @@ class main():
         self.num_i = 12
         self.num_h = 100
         self.num_o = 6
-        self.model = MLP_3
+        self.model = MLP_6
         
         # 如果是接着训练则输入前面的权重路径
         self.model_path = r''
@@ -58,8 +59,7 @@ class main():
         self.link_twist = torch.FloatTensor([math.pi / 2, 0, 0, math.pi / 2, -math.pi / 2, 0])
 
         # 定义放置位置
-        self.ori_position = torch.FloatTensor([1.2258864965873641, -2.436513135828552, -0.8611439933798337, -2.6471777579888087, 4.037534027618943, -0.568570505349759]
-)
+        self.ori_position = torch.FloatTensor([-3.0139431702761104, 0.8253651927851409, 0.5984414268877272, 3.743877149732617, 3.6483970171173183, 0.9386022425191627])
     def train(self):
         num_i = self.num_i
         num_h = self.num_h
@@ -67,8 +67,8 @@ class main():
 
         NUMError1 = []
         NUMError2 = []
-        NUMNOError1 = []
-        NUMNOError2 = []
+        NUM_incorrect = []
+        NUM_correct = []
         NUM_correct_test = []
         NUM_incorrect_test = []
         echo_loss = []
@@ -76,6 +76,7 @@ class main():
         NUM_2_to_1 = []
         NUM_mid = []
         NUM_lar = []
+        NUM_sametime_solution = []
 
         epochs = self.args.epochs
         data_loader_train = self.data_loader_train
@@ -102,8 +103,8 @@ class main():
             sum_loss_test = 0.0
             numError1 = 0
             numError2 = 0
-            numNOError1 = 0
-            numNOError2 = 0
+            num_incorrect = 0
+            num_correct = 0
 
             for data in data_loader_train:  # 读入数据开始训练
                 # 将目标物体1x6与放置位置1x6组合为1x12
@@ -132,49 +133,49 @@ class main():
 
                 # 计算 IK_loss_batch
                 IK_loss_batch = torch.tensor(0.0, requires_grad=True)
+                IK_loss2 = torch.tensor(0.0, requires_grad=True)
                 IK_loss3 = torch.tensor(0.0, requires_grad=True)
 
                 for i in range(len(input_tar)):
 
-                    angle_solution, num_Error1, num_Error2 = IK.calculate_IK(
+                    angle_solution, num_Error1, num_Error2, the_NANLOSS_of_illegal_solution_with_num_and_Nan = IK.calculate_IK(
                         input_tar[i], 
                         MLP_output_base[i], 
                         self.link_length, 
                         self.link_offset, 
                         self.link_twist)
 
-                    # if not num_Error1 + num_Error2 == 0:
-                    #     IK_y_o_n_tar = 0
-                    # else:
-                    #     IK_y_o_n_tar = 1
+                    if not num_Error1 + num_Error2 == 0:
+                        IK_y_o_n_tar = 0
+                    else:
+                        IK_y_o_n_tar = 1
 
                     # 存在错误打印
                     numError1 = numError1 + num_Error1
                     numError2 = numError2 + num_Error2
                     # 计算单IK_loss
-                    IK_loss1, num_NOError1, num_NOError2 = IK_loss.calculate_IK_loss(angle_solution)
+                    IK_loss1, num_NOError1, num_NOError2 = IK_loss.calculate_IK_loss(angle_solution, the_NANLOSS_of_illegal_solution_with_num_and_Nan)
 
-                    # #计算plannerloss/目标物体位置和放置位置同时有解
-                    # llll = int(len(input_tar) / 2)
-                    # if i in range(llll):
-                    #     angle_solution_ori, IK_y_or_n_ori = planner_loss.IK_yes_or_no(
-                    #         input_tar[i + llll], 
-                    #         MLP_output_base[i + llll], 
-                    #         self.link_length, 
-                    #         self.link_offset, 
-                    #         self.link_twist)
-                    #     if not IK_y_o_n_tar + IK_y_or_n_ori == 2:
-                    #         IK_loss2 = IK_loss2 + torch.tensor([10])
+                    #计算plannerloss/目标物体位置和放置位置同时有解
+                    llll = int(len(input_tar) / 2)
+                    if i in range(llll):
+                        angle_solution_ori, IK_y_or_n_ori = planner_loss.IK_yes_or_no(
+                            input_tar[i + llll], 
+                            MLP_output_base[i + llll], 
+                            self.link_length, 
+                            self.link_offset, 
+                            self.link_twist)
+                        if not IK_y_o_n_tar + IK_y_or_n_ori == 2:
+                            IK_loss2 = IK_loss2 + 100
 
                     # 总loss
-                    # IK_loss_batch = IK_loss_batch + IK_loss1 + IK_loss2
-                    # IK_loss_batch = IK_loss_batch + IK_loss1 + IK_loss3
-                    IK_loss_batch = IK_loss_batch + IK_loss1
+                    IK_loss_batch = IK_loss_batch + IK_loss1 + IK_loss2
+                    # IK_loss_batch = IK_loss_batch + IK_loss1
 
-                    # 无错误打印
-                    numNOError1 = numNOError1 + num_NOError1
-                    numNOError2 = numNOError2 + num_NOError2                            
-
+                    # 右/无错误打印
+                    num_incorrect = num_incorrect + num_NOError1
+                    num_correct = num_correct + num_NOError2
+                # print(IK_loss_batch)                            
                 # planner_loss//相距较远的不进行loss计算，较近的添加loss，并且如果求出的两个底盘位置距离在一定范围则转换为一个中间位置
                 llll = int(len(input_tar) / 2)
                 for p in range(llll):
@@ -184,15 +185,35 @@ class main():
                     y_1 = tar_base[4]
                     x_2 = obj_base[3]
                     y_2 = obj_base[4]
-                    distance = math.sqrt((y_2 - y_1)**2 + (x_2 - x_1)**2)
-                    # print(distance)
-                    if distance >= 5:
-                        IK_loss3 = IK_loss3 + distance * 1
-                    elif 1.5 < distance < 5:
-                        IK_loss3 = IK_loss3 + distance * 5
+                    distance1 = math.sqrt((y_2 - y_1)**2 + (x_2 - x_1)**2)
+                    obj_input = inputs[p]
+                    x_1_in = obj_input[3]
+                    y_1_in = obj_input[4]
+                    x_2_in = obj_input[9]
+                    y_2_in = obj_input[10]
+                    distance2 = math.sqrt((y_2_in - y_1_in)**2 + (x_2_in - x_1_in)**2)
+                    # print(distance1, distance2)
+                    if distance2 > 2.6:
+                        if distance1 > distance2:
+                            IK_loss3 = IK_loss3 + (distance1 - distance2) * 100
+                        else:
+                            IK_loss3 = IK_loss3 + torch.tensor([0])
                     else:
-                        IK_loss3 = IK_loss3 + torch.tensor([0])
+                        # if distance1 >= 3:
+                        #     IK_loss3 = IK_loss3 + torch.tensor([0]) 
+                        # elif 1.5 < distance1 < 2.5:
+                        #     IK_loss3 = IK_loss3 + distance1 * cos(torch.tensor(math.pi/2 * (distance1-3)/1.5))
+                        # else:
+                        #     IK_loss3 = IK_loss3 + torch.tensor([0]) - 1.5 * sin(torch.tensor(math.pi / 2 * (-(2/3 * distance1) + 1)))
+                        # if not distance1 > 0.1:
+                        #     IK_loss3 = IK_loss3 + distance1 * 10
+                        # else:
+                        #     IK_loss3 = IK_loss3 + (10 * distance1 - 1)
+                # print(IK_loss3, '*' * 50)
+                        IK_loss3 = IK_loss3 + (10 * distance1 - 5) * 100
+                # print(IK_loss3, '*' * 50)
                 IK_loss_batch = IK_loss_batch + IK_loss3
+                # print(IK_loss_batch, '*' * 50)
 
                 IK_loss_batch.retain_grad()
 
@@ -207,24 +228,25 @@ class main():
                     # print("第{}轮的网络模型被成功存下来了！储存内容包括网络状态、优化器状态、当前loss等".format(epoch))
                     checkpoints(model, epoch, optimizer, loss, self.checkpoint_dir)
 
-
-                # loss.backward()  # 反向传播求梯度
-                loss.backward(torch.ones_like(loss))  # 反向传播求梯度
+                loss.backward()  # 反向传播求梯度
+                # loss.backward(torch.ones_like(loss))  # 反向传播求梯度
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=self.args.clip)  # 进行梯度裁剪
                 optimizer.step()  # 更新所有梯度
                 sum_loss = sum_loss + loss.data
 
-            echo_loss.append(sum_loss / 100)
+            echo_loss.append(sum_loss / (len(data_loader_train)))
+            # print(echo_loss)
             
             NUMError1.append(numError1)
             NUMError2.append(numError2)
-            NUMNOError1.append(numNOError1)
-            NUMNOError2.append(numNOError2)
+            NUM_incorrect.append(num_incorrect)
+            NUM_correct.append(num_correct)
 
             print("numError1", numError1)
             print("numError2", numError2)
-            print("num_NOError1", numNOError1)
-            print("num_NOError2", numNOError2)
+            print("num_correct", num_correct)
+            print("num_incorrect", num_incorrect)
+
 
             model.eval()
 
@@ -234,6 +256,7 @@ class main():
             num_2_to_1 = 0
             num_mid = 0
             num_lar = 0
+            num_sametime_solution = 0
             for data_test in data_loader_test:
                 with torch.no_grad():
                     inputs_test = shaping_inputs_6to12(self.ori_position, data_test[0])
@@ -252,19 +275,15 @@ class main():
                     # 计算 IK_loss_batch
                     IK_loss_batch_test = torch.tensor(0.0, requires_grad=True)
                     IK_loss3_test = torch.tensor(0.0, requires_grad=True)
-                    for i in range(len(inputs_test)):
-                        angle_solution, IK_test_incorrect = IK.calculate_IK_test(
+                    for i in range(len(input_tar_test)):
+                        angle_solution = IK.calculate_IK_test(
                             input_tar_test[i], 
                             MLP_output_base_test[i], 
                             self.link_length, 
                             self.link_offset, 
                             self.link_twist)
                         # IK时存在的错误打印
-                        num_incorrect_test = num_incorrect_test + IK_test_incorrect
-
-                        IK_loss_test1, IK_loss_test_incorrect, IK_loss_test_correct = IK_loss.calculate_IK_loss_test(angle_solution, 
-                                                                                                                    inputs_test[i], 
-                                                                                                                    outputs_test[i])
+                        IK_loss_test1, IK_loss_test_incorrect, IK_loss_test_correct = IK_loss.calculate_IK_loss_test(angle_solution)
                         # 计算IK_loss时存在的错误与正确的打印
                         num_incorrect_test = num_incorrect_test + IK_loss_test_incorrect
                         num_correct_test = num_correct_test + IK_loss_test_correct
@@ -274,51 +293,81 @@ class main():
                     # 计算打印信息
                     llll = int(len(input_tar) / 2)
                     for i in range(llll):
-                        obj_base = intermediate_outputs_test[i]
-                        tar_base = intermediate_outputs_test[i + llll]
-                        x_1 = tar_base[0]
-                        y_1 = tar_base[1]
-                        x_2 = obj_base[0]
-                        y_2 = obj_base[1]
+                        obj_base = outputs_test[i]
+                        tar_base = outputs_test[i + llll]
+                        x_1 = tar_base[3]
+                        y_1 = tar_base[4]
+                        x_2 = obj_base[3]
+                        y_2 = obj_base[4]
                         distance = math.sqrt((y_2 - y_1)**2 + (x_2 - x_1)**2)
-                        # print(distance)
-                        if distance >= 5:
-                            IK_loss3_test = IK_loss3_test + distance * 1
+                        # obj_input = inputs_test[i]
+                        # x_1_in = obj_input[3]
+                        # y_1_in = obj_input[4]
+                        # x_2_in = obj_input[9]
+                        # y_2_in = obj_input[10]
+                        # distance2 = math.sqrt((y_2_in - y_1_in)**2 + (x_2_in - x_1_in)**2)
+            #             print(distance1, distance2)
+            #             if not distance2 > 2.6:
+
+                        if distance >= 1:
+                            # IK_loss3_test = IK_loss3_test + torch.tensor([0])
                             num_lar = num_lar + 1
-                        elif 1.5 < distance < 5:
-                            IK_loss3_test = IK_loss3_test + distance * 5
+                        elif 0.5 < distance < 1:
+                            # IK_loss3_test = IK_loss3_test + distance * sin(torch.tensor(math.pi / 2 * (distance-1.5)/4.5)) * 10
                             num_mid = num_mid + 1
                         else:
-                            IK_loss3_test = IK_loss3_test + torch.tensor([0])
+                            # IK_loss3_test = IK_loss3_test + torch.tensor([0])
                             num_2_to_1 = num_2_to_1 + 1
-                    IK_loss_batch_test = IK_loss_batch_test + IK_loss3_test
 
-                    # 定义总loss函数
-                    loss = (IK_loss_batch_test) / len(inputs_test)
+                                        # #计算plannerloss/目标物体位置和放置位置同时有解
+                    
+                    for aaaa in range(llll):
+                        angle_solution_ori, IK_y_or_n_ori = planner_loss.IK_yes_or_no(
+                            input_tar_test[aaaa], 
+                            MLP_output_base_test[aaaa], 
+                            self.link_length, 
+                            self.link_offset, 
+                            self.link_twist)
+                        angle_solution_tar, IK_y_or_n_tar = planner_loss.IK_yes_or_no(
+                            input_tar_test[aaaa + llll], 
+                            MLP_output_base_test[aaaa + llll], 
+                            self.link_length, 
+                            self.link_offset, 
+                            self.link_twist)
+                        if IK_y_or_n_tar + IK_y_or_n_ori == 2:
+                            num_sametime_solution += 1
 
-                    sum_loss_test = sum_loss_test + loss.data
+            #         IK_loss_batch_test = IK_loss_batch_test + IK_loss3_test
 
-            echo_loss_test.append(sum_loss / 100)
+            #         # 定义总loss函数
+            #         loss = (IK_loss_batch_test) / len(inputs_test)
 
-            print('num_2_to1', num_2_to_1)
+            #         sum_loss_test = sum_loss_test + loss.data
+
+            # echo_loss_test.append(sum_loss_test / len(data_loader_test))
+
             print("num_correct_test", num_correct_test)
             print("num_incorrect_test", num_incorrect_test)
+            print('num_2_to1', num_2_to_1)
+            print('num_sametime_solution', num_sametime_solution)
 
             NUM_2_to_1.append(num_2_to_1)
             NUM_mid.append(num_mid)
             NUM_lar.append(num_lar)
             NUM_incorrect_test.append(num_incorrect_test)
             NUM_correct_test.append(num_correct_test)
+            NUM_sametime_solution.append(num_sametime_solution)
 
             print('[%d,%d] loss:%.03f' % (epoch, start_epoch + epochs-1, sum_loss / (len(data_loader_train))), "-" * 100)
             print(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
 
         # 画图
-        plot_IK_solution(self.checkpoint_dir, start_epoch, epochs, self.args.num_train, NUM_incorrect_test, NUM_correct_test)
-        plot_train(self.checkpoint_dir, start_epoch, epochs, self.args.num_train, NUMError1, NUMError2, NUMNOError1, NUMNOError2)
+        plot_IK_solution(self.checkpoint_dir, start_epoch, epochs, len(self.data_test), NUM_incorrect_test, NUM_correct_test)
+        plot_train(self.checkpoint_dir, start_epoch, epochs, self.args.num_train, NUMError1, NUMError2, NUM_incorrect, NUM_correct)
         plot_train_loss(self.checkpoint_dir, start_epoch, epochs, echo_loss)
-        plot_test_loss(self.checkpoint_dir, start_epoch, epochs, echo_loss_test)
+        # plot_test_loss(self.checkpoint_dir, start_epoch, epochs, echo_loss_test)
         plot_2_to_1(self.checkpoint_dir, start_epoch, epochs, NUM_2_to_1, NUM_mid, NUM_lar)
+        plot_sametime_solution(self.checkpoint_dir, start_epoch, epochs, NUM_sametime_solution)
 
 if __name__ == "__main__":
     a = main()
